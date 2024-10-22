@@ -11,10 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clean working directory
+        run: |
+          git clean -fdx
+          git reset --hard HEAD
+
       - name: Package Release
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          tar -czf mktools-${VERSION}.tar.gz \
+          tar -czf "mktools-${VERSION}.tar.gz" \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='*.swp' \
