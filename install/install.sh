@@ -27,12 +27,12 @@ if [ "$VERSION" = "latest" ]; then
     DOWNLOAD_URL=$(curl -s https://api.github.com/repos/amenophis1er/mktools/releases/latest | \
         grep "browser_download_url.*tar.gz" | cut -d '"' -f 4)
 else
+    # Make sure VERSION starts with 'v'
+    [[ $VERSION == v* ]] || VERSION="v$VERSION"
     DOWNLOAD_URL="https://github.com/amenophis1er/mktools/releases/download/${VERSION}/mktools-${VERSION}.tar.gz"
 fi
 
-echo -e "${CYAN}Extracting to $INSTALL_DIR...${NC}"
-curl -L "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR" --strip-components=1 || \
-    { echo -e "${RED}Failed to download and extract mktools${NC}"; exit 1; }
+echo "Download URL: $DOWNLOAD_URL"
 
 # Install version file
 echo "$VERSION" > "$INSTALL_DIR/VERSION"

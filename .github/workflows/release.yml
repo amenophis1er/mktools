@@ -19,16 +19,20 @@ jobs:
       - name: Package Release
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+          echo "Creating package for version $VERSION"
+          
           mkdir -p /tmp/mktools-${VERSION}
           cp -r . /tmp/mktools-${VERSION}/
           cd /tmp
-          tar -czf mktools-${VERSION}.tar.gz \
+          
+          tar -czf "mktools-${VERSION}.tar.gz" \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='*.swp' \
             --exclude='.DS_Store' \
-            mktools-${VERSION}
-          mv mktools-${VERSION}.tar.gz $GITHUB_WORKSPACE/
+            "mktools-${VERSION}"
+          
+          mv "mktools-${VERSION}.tar.gz" $GITHUB_WORKSPACE/
 
       - name: Generate Changelog
         id: changelog
