@@ -1,35 +1,3 @@
-#!/usr/bin/env bash
-
-# Installation directory
-INSTALL_DIR="$HOME/.local/share/mktools"
-BIN_DIR="$HOME/.local/bin"  # Change to user's bin directory
-REPO_URL="git@github.com:amenophis1er/mktools.git"
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-
-# Error handling
-set -e  # Exit on error
-
-# Create directories if they don't exist
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$BIN_DIR"
-
-# Clone or update the repository
-if [ -d "$INSTALL_DIR/.git" ]; then
-    echo -e "${CYAN}Updating mktools...${NC}"
-    cd "$INSTALL_DIR" && git pull
-else
-    echo -e "${CYAN}Installing mktools...${NC}"
-    if ! git clone "$REPO_URL" "$INSTALL_DIR"; then
-        echo -e "${RED}Failed to clone repository. Make sure you have access to $REPO_URL${NC}"
-        exit 1
-    fi
-fi
-
 # Create the mktools command
 MKTOOLS_CMD="$BIN_DIR/mktools"
 
@@ -47,6 +15,18 @@ function list_targets() {
             echo "  $target_name"
         fi
     done
+}
+
+function check_version() {
+    local current_version=$(cat "$MKTOOLS_DIR/VERSION" 2>/dev/null || echo "unknown")
+    local latest_version=$(curl -s https://api.github.com/repos/amenophis1er/mktools/releases/latest | \
+        grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+
+    echo "Current version: $current_version"
+    if [ "$current_version" != "$latest_version" ]; then
+        echo "New version $latest_version available!"
+        echo "Run: curl -sSL https://raw.githubusercontent.com/amenophis1er/mktools/main/install/install.sh | bash"
+    fi
 }
 
 function install_target() {
@@ -96,16 +76,19 @@ case "$1" in
         fi
         install_target "$2"
         ;;
+    "version")
+        check_version
+        ;;
     "dump"|"test"|*)  # First try to execute as target, fallback to usage
         if [ -z "$1" ]; then
-            echo "Usage: mktools [list|install <target-name>|<target-name>]"
+            echo "Usage: mktools [list|install <target-name>|version|<target-name>]"
             exit 1
         fi
         # Check if this is an installed target
         if [ -f "Makefile" ] && grep -q "include.*$1" "Makefile"; then
             make "$1"
         else
-            echo "Usage: mktools [list|install <target-name>|<target-name>]"
+            echo "Usage: mktools [list|install <target-name>|version|<target-name>]"
             exit 1
         fi
         ;;
@@ -115,21 +98,3 @@ then
     echo -e "${RED}Failed to create mktools command${NC}"
     exit 1
 fi
-
-# Make the command executable
-if ! chmod +x "$MKTOOLS_CMD"; then
-    echo -e "${RED}Failed to make mktools command executable${NC}"
-    exit 1
-fi
-
-# Add BIN_DIR to PATH if not already there
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    echo -e "${CYAN}Adding $BIN_DIR to your PATH...${NC}"
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-    echo -e "${YELLOW}Please restart your shell or run: export PATH=\"$BIN_DIR:\$PATH\"${NC}"
-fi
-
-echo -e "${GREEN}mktools installed successfully!${NC}"
-echo "You can now use 'mktools list' to see available targets"
-echo "and 'mktools install <target-name>' to install a target"

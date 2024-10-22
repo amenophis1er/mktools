@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Release
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          tar -czf mktools-${VERSION}.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='*.swp' \
+            --exclude='.DS_Store' \
+            .
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # Extract changes since last tag
+          git tag -l --sort=-v:refname | head -n 2 | tac | xargs -I {} git log --pretty=format:"* %s" {}..HEAD > CHANGELOG.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: mktools-*.tar.gz
+          body_path: CHANGELOG.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
