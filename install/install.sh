@@ -48,13 +48,26 @@ cat > "$MKTOOLS_CMD" << 'EOF' || { echo -e "${RED}Failed to create mktools comma
 MKTOOLS_DIR="$HOME/.local/share/mktools"
 
 function list_targets() {
-    echo "Available targets:"
-    for target in "$MKTOOLS_DIR/targets/"*/; do
-        if [ -d "$target" ]; then
-            target_name=$(basename "$target")
-            echo "  $target_name"
-        fi
-    done
+    echo -e "${CYAN}Available targets:${NC}"
+    echo -e "\n${YELLOW}dump${NC}"
+    echo "  Description: Creates a context dump of your project structure"
+    echo "  Features:"
+    echo "    - Directory structure listing"
+    echo "    - File listing"
+    echo "    - Content of text files (excludes binary files)"
+    echo -e "  ${GREEN}Usage:${NC}"
+    echo "    1. Install:  mktools install dump"
+    echo "    2. Use:      make dump"
+    echo
+    echo -e "${CYAN}Installation Instructions:${NC}"
+    echo "  To use any target, you need to install it first:"
+    echo "    mktools install <target-name>"
+    echo
+    echo "  This will update your Makefile to include the target."
+    echo "  After installation, use 'make <target-name>' to run the target."
+    echo
+    echo -e "${YELLOW}Note:${NC} Targets are used with 'make' command after installation,"
+    echo "      not with 'mktools' command directly."
 }
 
 function check_version() {
@@ -119,16 +132,20 @@ case "$1" in
     "version")
         check_version
         ;;
-    *)
+    "dump"|"test"|*)  # First try to execute as target, fallback to usage
         if [ -z "$1" ]; then
-            echo "Usage: mktools [list|install <target-name>|version]"
+            echo -e "${YELLOW}Usage: mktools [list|install <target-name>|version]${NC}"
             exit 1
         fi
-        # Check if this is an installed target
-        if [ -f "Makefile" ] && grep -q "include.*$1" "Makefile"; then
-            make "$1"
+        # If it looks like they're trying to use a target directly
+        if [ -d "$MKTOOLS_DIR/targets/$1" ]; then
+            echo -e "${RED}Note: Targets cannot be run directly with mktools${NC}"
+            echo -e "${GREEN}To use the '$1' target:${NC}"
+            echo "  1. First install it:  mktools install $1"
+            echo "  2. Then use it with:  make $1"
+            exit 1
         else
-            echo "Usage: mktools [list|install <target-name>|version]"
+            echo -e "${YELLOW}Usage: mktools [list|install <target-name>|version]${NC}"
             exit 1
         fi
         ;;
