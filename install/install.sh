@@ -96,8 +96,18 @@ case "$1" in
         fi
         install_target "$2"
         ;;
-    *)
-        echo "Usage: mktools [list|install <target-name>]"
+    "dump"|"test"|*)  # First try to execute as target, fallback to usage
+        if [ -z "$1" ]; then
+            echo "Usage: mktools [list|install <target-name>|<target-name>]"
+            exit 1
+        fi
+        # Check if this is an installed target
+        if [ -f "Makefile" ] && grep -q "include.*$1" "Makefile"; then
+            make "$1"
+        else
+            echo "Usage: mktools [list|install <target-name>|<target-name>]"
+            exit 1
+        fi
         ;;
 esac
 EOF
