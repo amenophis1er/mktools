@@ -1,8 +1,48 @@
+#!/usr/bin/env bash
+
+# Enhanced install.sh
+VERSION=${1:-latest}
+INSTALL_DIR="$HOME/.local/share/mktools"
+BIN_DIR="$HOME/.local/bin"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Error handling
+set -e
+
+echo -e "${CYAN}Installing mktools...${NC}"
+
+# Create directories if they don't exist
+echo -e "${CYAN}Creating directories...${NC}"
+mkdir -p "$INSTALL_DIR" || { echo -e "${RED}Failed to create $INSTALL_DIR${NC}"; exit 1; }
+mkdir -p "$BIN_DIR" || { echo -e "${RED}Failed to create $BIN_DIR${NC}"; exit 1; }
+
+# Download and extract
+echo -e "${CYAN}Downloading version ${VERSION}...${NC}"
+if [ "$VERSION" = "latest" ]; then
+    DOWNLOAD_URL=$(curl -s https://api.github.com/repos/amenophis1er/mktools/releases/latest | \
+        grep "browser_download_url.*tar.gz" | cut -d '"' -f 4)
+else
+    DOWNLOAD_URL="https://github.com/amenophis1er/mktools/releases/download/${VERSION}/mktools-${VERSION}.tar.gz"
+fi
+
+echo -e "${CYAN}Extracting to $INSTALL_DIR...${NC}"
+curl -L "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR" --strip-components=1 || \
+    { echo -e "${RED}Failed to download and extract mktools${NC}"; exit 1; }
+
+# Install version file
+echo "$VERSION" > "$INSTALL_DIR/VERSION"
+
 # Create the mktools command
 MKTOOLS_CMD="$BIN_DIR/mktools"
 
 # Create the script
-if ! cat > "$MKTOOLS_CMD" << 'EOF'
+echo -e "${CYAN}Creating mktools command...${NC}"
+cat > "$MKTOOLS_CMD" << 'EOF' || { echo -e "${RED}Failed to create mktools command${NC}"; exit 1; }
 #!/usr/bin/env bash
 
 MKTOOLS_DIR="$HOME/.local/share/mktools"
@@ -79,22 +119,25 @@ case "$1" in
     "version")
         check_version
         ;;
-    "dump"|"test"|*)  # First try to execute as target, fallback to usage
+    *)
         if [ -z "$1" ]; then
-            echo "Usage: mktools [list|install <target-name>|version|<target-name>]"
+            echo "Usage: mktools [list|install <target-name>|version]"
             exit 1
         fi
         # Check if this is an installed target
         if [ -f "Makefile" ] && grep -q "include.*$1" "Makefile"; then
             make "$1"
         else
-            echo "Usage: mktools [list|install <target-name>|version|<target-name>]"
+            echo "Usage: mktools [list|install <target-name>|version]"
             exit 1
         fi
         ;;
 esac
 EOF
-then
-    echo -e "${RED}Failed to create mktools command${NC}"
-    exit 1
-fi
+
+# Make the command executable
+chmod +x "$MKTOOLS_CMD" || { echo -e "${RED}Failed to make mktools command executable${NC}"; exit 1; }
+
+echo -e "${GREEN}mktools installed successfully!${NC}"
+echo "You can now use 'mktools list' to see available targets"
+echo "and 'mktools install <target-name>' to install a target"
