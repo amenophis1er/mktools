@@ -1,12 +1,12 @@
 .PHONY: release help
 
-# Added by mktools
-mktools_path := /Users/amen/.local/share/mktools
-include $(mktools_path)/common/*.mk
-include $(mktools_path)/targets/dump/*.mk
+# At the start of your main Makefile
+HELP_TEXT := Available targets:
+HELP_TEXT += "\n  release          - Create a new release/tag and push it (e.g., make release VERSION=1.0.0)"
 
-
-default: help
+.PHONY: help
+help:
+	@echo "$(HELP_TEXT)"
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "Please specify the VERSION, e.g., make release VERSION=1.0.0" && exit 1; fi

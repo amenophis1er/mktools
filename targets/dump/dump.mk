@@ -1,3 +1,5 @@
+# targets/dump/dump.mk
+
 # Include required variables
 include $(dir $(lastword $(MAKEFILE_LIST)))/vars.mk
 include $(mktools_path)/common/colors.mk
@@ -5,9 +7,7 @@ include $(mktools_path)/common/colors.mk
 # Get the current folder name
 CURRENT_FOLDER := $(notdir $(CURDIR))
 
-# Help description
-dump.help:
-	@echo "  dump             - Create a context dump of the project structure"
+HELP_TEXT += "\n  dump             - Create a context dump of the project structure"
 
 # Dump project structure and file contents
 .PHONY: dump

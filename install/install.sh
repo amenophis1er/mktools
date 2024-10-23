@@ -102,18 +102,18 @@ function install_target() {
     if [ ! -d "$target_dir" ]; then
         echo -e "${RED}Target $target not found${NC}"
         return 1
-    fi
+    }
 
     # Create Makefile if it doesn't exist
     if [ ! -f "$makefile" ]; then
         touch "$makefile"
-    fi
+    }
 
     # Check if target already included
     if grep -q "include.*$target" "$makefile"; then
         echo -e "${YELLOW}Target $target already included${NC}"
         return 0
-    fi
+    }
 
     # Create temp file
     temp_file=$(mktemp)
@@ -121,8 +121,14 @@ function install_target() {
     # Preserve any comments at the start of the file
     sed -n '/^[[:space:]]*#/p' "$makefile" > "$temp_file"
 
-    # Add PHONY declarations
-    grep "^\.PHONY:" "$makefile" >> "$temp_file"
+    # Add PHONY declarations if they exist
+    grep "^\.PHONY:" "$makefile" >> "$temp_file" 2>/dev/null || true
+
+    # Initialize help structure if it doesn't exist
+    if ! grep -q "^HELP_TEXT :=" "$makefile"; then
+        echo "" >> "$temp_file"
+        echo "HELP_TEXT := Available targets:" >> "$temp_file"
+    fi
 
     # Add mktools includes
     echo "" >> "$temp_file"
@@ -132,15 +138,30 @@ function install_target() {
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
 
+    # Add help target if it doesn't exist
+    if ! grep -q "^help:" "$makefile"; then
+        echo "" >> "$temp_file"
+        echo ".PHONY: help" >> "$temp_file"
+        echo "help:" >> "$temp_file"
+        echo -e "\t@echo \"\$(HELP_TEXT)\"" >> "$temp_file"
+        echo "" >> "$temp_file"
+    fi
+
     # Add the default target if it exists (preserving its position)
-    grep "^default:" "$makefile" >> "$temp_file"
+    grep "^default:" "$makefile" >> "$temp_file" 2>/dev/null || true
 
-    # Add the rest of the file, excluding what we've already added
+    # Add the rest of the file content, excluding what we've already processed
     grep -v "^\.PHONY:" "$makefile" | \
+    grep -v "^HELP_TEXT :=" | \
+    grep -v "^help:" | \
     grep -v "^default:" | \
-    grep -v "^[[:space:]]*#" >> "$temp_file"
+    grep -v "^[[:space:]]*#" | \
+    grep -v "^[[:space:]]*$" >> "$temp_file"
 
-    mv "$temp_file" "$makefile"
+    # Clean up any duplicate blank lines
+    awk 'NF {p=1} p' "$temp_file" > "$temp_file.clean"
+    mv "$temp_file.clean" "$makefile"
+    rm -f "$temp_file"
 
     echo -e "${GREEN}Target $target installed successfully${NC}"
 }
