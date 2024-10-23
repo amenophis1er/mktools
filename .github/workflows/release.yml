@@ -8,44 +8,46 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate installer
+      # Create dist directory
+      - name: Build
         run: |
-          # Create dist directory
           mkdir -p dist
-          
-          # Run generator script
           bash scripts/generate_installer.sh
-          
-          # Verify installer was created
           test -f dist/install.sh || exit 1
-          
-          # Make installer executable
           chmod +x dist/install.sh
 
-      - name: Create Release
-        id: create_release
+      # Create the release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: dist/install.sh
           name: Release ${{ github.ref_name }}
           body: |
             Release ${{ github.ref_name }}
-            
+
             ## Installation
             ```bash
             curl -sSL https://github.com/amenophis1er/mktools/releases/download/${{ github.ref_name }}/install.sh | bash
             ```
-          draft: false
-          prerelease: false
 
-      - name: Update latest release
+      # For latest release, either:
+      # Option 1: Create a separate latest release
+      - name: Update Latest Release
+        if: success()
         run: |
           cp dist/install.sh dist/install-latest.sh
-          gh release upload latest dist/install-latest.sh --clobber
+          gh release create latest dist/install-latest.sh --title "Latest Release" --notes "Latest release" --prerelease || gh release upload latest dist/install-latest.sh --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # OR Option 2: Just add the file to the current release
+      - name: Add Latest Version
+        if: success()
+        run: |
+          cp dist/install.sh dist/install-latest.sh
+          gh release upload ${{ github.ref_name }} dist/install-latest.sh --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
