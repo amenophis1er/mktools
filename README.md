@@ -1,74 +1,147 @@
 # mktools
 
-A collection of reusable Makefile targets and utilities.
+A collection of powerful Makefile tools to enhance your build processes and development workflow.
 
-## Description
+## Features
 
-mktools provides a collection of reusable Makefile targets that you can easily add to your projects. Each target is self-contained with its own variables and documentation.
+- 📦 Self-contained installer with no git dependency
+- 🎯 Modular target system with selective installation
+- 🔄 Smart Makefile merging that preserves existing content
+- 🎨 Colored output for better readability
+- 📝 Comprehensive documentation generation
+- 🔍 Project context dumping for documentation
 
-## Directory Structure
+## Quick Start
 
-```
-mktools/
-├── README.md           # This file
-├── common/            # Common variables and utilities
-│   └── colors.mk      # Terminal colors for pretty output
-├── install/           # Installation related files
-│   └── install.sh     # Installation script
-└── targets/          # Collection of available targets
-└── dump/         # Example: dump target
-├── dump.mk   # The target implementation
-└── vars.mk   # Target specific variables
-```
+### Installation
 
-## Installation
-
-You can install mktools using this command:
+Download and run the installer:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/amenophis1er/mktools/main/install/install.sh | bash
+curl -sSL https://github.com/amenophis1er/mktools/releases/latest/download/install.sh | bash
 ```
 
-The installation script will:
-- Clone the repository to `~/.local/share/mktools`
-- Create the `mktools` command in `~/.local/bin`
-- Add `~/.local/bin` to your PATH if needed
+The installer will:
+1. Present available targets for installation
+2. Preserve any existing Makefile content
+3. Add selected mktools targets and their dependencies
+4. Validate the resulting Makefile
 
-Note: You may need to restart your shell or update your PATH after installation.
+### Basic Usage
 
-## Usage
-
-List available targets:
 ```bash
-mktools list
-```
+# Show available targets
+make help
 
-Install a target:
-```bash
-mktools install <target-name>
-```
+# Show version information
+make version
 
-### Available Targets
-
-#### dump
-Creates a context dump of your project structure, including:
-- Directory structure
-- File listing
-- Content of text files (excluding binary files and common formats like images, pdfs, etc)
-
-Usage after installation:
-```bash
+# Generate project context documentation
 make dump
+```
+
+## Available Targets
+
+### Core Targets
+
+- `version`: Display mktools version and check for updates
+- `dump`: Generate comprehensive project context documentation
+
+### Target Groups
+
+Basic targets (recommended for all projects):
+- version
+
+Development targets:
+- dump
+
+## Configuration
+
+### Dump Target Configuration
+
+Customize the dump target by setting these variables in your Makefile:
+
+```makefile
+# Add paths to exclude from dump
+EXCLUDE_PATHS += \
+    my/custom/path/** \
+    *.custom.ext
+
+# Add file extensions to exclude from content dump
+CONTENT_EXCLUDE_EXT += \
+    lock \
+    conf
+```
+
+### Color Configuration
+
+Disable colored output:
+
+```makefile
+# Disable colors
+RESET :=
+RED :=
+GREEN :=
+YELLOW :=
+BLUE :=
+PURPLE :=
+CYAN :=
+WHITE :=
+```
+
+## Advanced Usage
+
+### Selective Target Installation
+
+During installation, you can choose which targets to install:
+```bash
+# Download installer
+curl -O https://github.com/amenophis1er/mktools/releases/latest/download/install.sh
+chmod +x install.sh
+
+# Run installer interactively
+./install.sh
+```
+
+### Updating mktools
+
+To update to the latest version:
+1. Run `make version` to check for updates
+2. Re-run the installer if an update is available
+
+### Integration with Existing Makefiles
+
+mktools intelligently merges with your existing Makefile:
+- Preserves your existing targets and variables
+- Adds mktools targets without conflicts
+- Maintains existing .PHONY declarations
+- Clearly marks mktools sections for easy maintenance
+
+Example of merged Makefile:
+```makefile
+# Your existing comments are preserved
+.PHONY: your-target mktools-target
+
+# Your existing variables remain unchanged
+YOUR_VAR := value
+
+# BEGIN MKTOOLS VARIABLES
+# mktools variables are isolated here
+# END MKTOOLS VARIABLES
+
+# Your existing targets remain unchanged
+your-target:
+    @echo "Your target"
+
+# BEGIN MKTOOLS TARGETS
+# mktools targets are isolated here
+# END MKTOOLS TARGETS
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-target`)
-3. Commit your changes (`git commit -am 'Add some amazing-target'`)
-4. Push to the branch (`git push origin feature/amazing-target`)
-5. Create a new Pull Request
+Contributions are welcome! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

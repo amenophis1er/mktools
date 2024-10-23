@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+
+# Ensure we're running in bash
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+
+# Exit on error, but don't exit on command not found
+set -e
+set +u
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+# Embedded file contents (will be replaced by actual content)
+COLORS_MK="__COLORS_MK__"
+VERSION_MK="__VERSION_MK__"
+DUMP_MK="__DUMP_MK__"
+VARS_MK="__VARS_MK__"
+TARGETS_MK="__TARGETS_MK__"
+
+# Define available targets
+AVAILABLE_TARGETS="dump version"
+TARGET_HELP="dump:Create a context dump of the project structure
+version:Display version information"
+
+# Decode function
+decode_content() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "$1" | base64 -D
+    else
+        echo "$1" | base64 -d
+    fi
+}
+
+update_makefile() {
+    local temp_content=$1
+    local makefile="Makefile"
+    local final_temp=$(mktemp)
+    local backup_file="${makefile}.backup"
+
+    echo -e "${CYAN}Current directory: $(pwd)${NC}"
+    echo -e "${CYAN}Creating/updating Makefile at: $(pwd)/${makefile}${NC}"
+
+    # Backup existing Makefile if it exists
+    if [ -f "$makefile" ]; then
+        cp "$makefile" "$backup_file"
+        echo -e "${CYAN}Created backup at: $(pwd)/${backup_file}${NC}"
+    fi
+
+    # Create final content
+    {
+        echo "# This Makefile was updated by mktools installer"
+        echo "# Original content is preserved and merged with mktools targets"
+        echo ""
+
+        # Add default target explicitly
+        echo "# Default to help if no target is specified"
+        echo ".DEFAULT_GOAL := help"
+        echo ""
+
+        # Collect and normalize .PHONY declarations
+        echo "# Combined .PHONY declarations"
+        {
+            if [ -f "$makefile" ]; then
+                grep "^\.PHONY:" "$makefile" | tr ' ' '\n' | grep -v "^\.PHONY:" || true
+            fi
+            grep "^\.PHONY:" "$temp_content" | tr ' ' '\n' | grep -v "^\.PHONY:" || true
+        } | sort -u | while read -r target; do
+            [ -n "$target" ] && echo ".PHONY: $target"
+        done
+        echo ""
+
+        # Extract mktools content (excluding .PHONY and help)
+        echo "# BEGIN MKTOOLS CONTENT"
+        awk '
+            BEGIN { in_block = 0; prev_empty = 1; }
+            /^\.PHONY:/ { next }
+            /^help:/ { in_block = 1; next }
+            /^[a-zA-Z]/ { in_block = 0 }
+            !in_block {
+                if ($0 ~ /^$/) {
+                    if (!prev_empty) print ""
+                    prev_empty = 1
+                } else {
+                    print
+                    prev_empty = 0
+                }
+            }
+        ' "$temp_content"
+        echo "# END MKTOOLS CONTENT"
+        echo ""
+
+        # Extract original content (excluding .PHONY, help, and installer header)
+        if [ -f "$makefile" ]; then
+            echo "# Original Makefile content"
+            awk '
+                BEGIN { in_help = 0 }
+                /^# This Makefile was updated by mktools installer/,/^$/ { next }
+                /^\.PHONY:/ { next }
+                /^help:/ { in_help = 1; next }
+                /^[a-zA-Z]/ { in_help = 0 }
+                !in_help { print }
+            ' "$makefile" | sed '/./,$!d' | sed -e '/^[[:space:]]*$/N;/^\n$/D'
+            echo ""
+        fi
+
+        # Create unified help target
+        echo "# Help target"
+        echo "help:"
+        if [ -f "$makefile" ]; then
+            sed -n '/^help:/,/^[a-zA-Z]/p' "$makefile" | \
+                grep "^[[:space:]]" | \
+                grep -v '@echo -e.*HELP_TEXT' || true
+        fi
+        echo -e '\t@echo -e "$(HELP_TEXT)"  # Dynamic content from mktools'
+        echo ""
+
+    } > "$final_temp"
+
+    # Move temporary file to final location
+    mv "$final_temp" "$makefile"
+    echo -e "${GREEN}Successfully updated Makefile at: $(pwd)/${makefile}${NC}"
+
+    # Remove backup if everything succeeded
+    rm -f "$backup_file"
+}
+
+# Main installation
+main() {
+    echo -e "${CYAN}Welcome to mktools installer${NC}"
+    echo -e "${CYAN}Will install in current directory: $(pwd)${NC}"
+
+    local confirm
+    while true; do
+        echo -n "Continue with installation? [Y/n] "
+        read -r confirm
+        confirm=${confirm:-Y}
+        if [[ "$confirm" =~ ^[YyNn]$ ]]; then
+            break
+        fi
+        echo "Please answer Y or N"
+    done
+
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
+        echo -e "${YELLOW}Installation cancelled${NC}"
+        exit 0
+    fi
+
+    echo -e "${CYAN}Proceeding with installation...${NC}"
+
+    # Select and install targets
+    local selected_targets=""
+    local choice
+
+    echo -e "\n${CYAN}Available targets:${NC}"
+    echo "0) All targets"
+    local i=1
+    while IFS=: read -r target description; do
+        if [ -n "$target" ]; then
+            echo "$i) $target - $description"
+            ((i++))
+        fi
+    done <<< "$TARGET_HELP"
+    echo ""
+
+    # Ensure terminal is sane and input/output is clean
+    stty sane
+    printf "\n"  # Clean newline
+
+    # Prompt user for input
+    while true; do
+        echo -n "Your choice (e.g., 1,2 for multiple targets): "
+        read -r choice
+
+        # Process selection
+        if [ "$choice" = "0" ]; then
+            selected_targets="$AVAILABLE_TARGETS"
+            break
+        elif [[ "$choice" =~ ^[0-9,[:space:]]*$ ]]; then
+            for num in $(echo "$choice" | tr ',' ' '); do
+                local target=$(echo "$AVAILABLE_TARGETS" | cut -d' ' -f$num 2>/dev/null)
+                if [ -n "$target" ]; then
+                    selected_targets="$selected_targets $target"
+                else
+                    echo -e "${RED}Invalid target number: $num. Please try again.${NC}"
+                    selected_targets=""
+                    break
+                fi
+            done
+            [ -n "$selected_targets" ] && break
+        else
+            echo -e "${RED}Invalid input. Please try again.${NC}"
+        fi
+    done
+
+    if [ -z "$selected_targets" ]; then
+        echo -e "${RED}No targets selected. Installation cancelled.${NC}"
+        exit 1
+    fi
+
+    echo ""  # Add a blank line for better formatting
+    echo -e "${CYAN}Installing selected targets: ${selected_targets}${NC}"
+
+    # Create temporary file for Makefile content
+    local temp_file=$(mktemp)
+
+    # Add core content (colors always included)
+    decode_content "$COLORS_MK" > "$temp_file"
+
+    # Add selected targets
+    for target in $selected_targets; do
+        case "$target" in
+            "version")
+                decode_content "$VERSION_MK" >> "$temp_file"
+                ;;
+            "dump")
+                decode_content "$VARS_MK" >> "$temp_file"
+                decode_content "$DUMP_MK" >> "$temp_file"
+                ;;
+        esac
+    done
+
+    # Update Makefile
+    update_makefile "$temp_file"
+    rm -f "$temp_file"
+
+    echo -e "${GREEN}Installation complete!${NC}"
+    echo "You can now use 'make help' to see available targets"
+}
+
+# Run main function
+main "$@"
