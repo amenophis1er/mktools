@@ -102,18 +102,18 @@ function install_target() {
     if [ ! -d "$target_dir" ]; then
         echo -e "${RED}Target $target not found${NC}"
         return 1
-    }
+    fi
 
     # Create Makefile if it doesn't exist
     if [ ! -f "$makefile" ]; then
         touch "$makefile"
-    }
+    fi
 
     # Check if target already included
     if grep -q "include.*$target" "$makefile"; then
         echo -e "${YELLOW}Target $target already included${NC}"
         return 0
-    }
+    fi
 
     # Create temp file
     temp_file=$(mktemp)
