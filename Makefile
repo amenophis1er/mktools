@@ -1,3 +1,8 @@
+# Added by mktools
+mktools_path := /Users/amen/.local/share/mktools
+include $(mktools_path)/common/*.mk
+include $(mktools_path)/targets/dump/*.mk
+
 # Makefile
 
 .PHONY: release help

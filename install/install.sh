@@ -76,11 +76,18 @@ function list_targets() {
 
 function check_version() {
     local current_version=$(cat "$MKTOOLS_DIR/VERSION" 2>/dev/null || echo "unknown")
+
+    # Don't check for updates if we just installed the latest version
+    if [ "$current_version" = "latest" ]; then
+        echo "Current version: latest (freshly installed)"
+        return 0
+    fi
+
     local latest_version=$(curl -s https://api.github.com/repos/amenophis1er/mktools/releases/latest | \
         grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
 
     echo "Current version: $current_version"
-    if [ "$current_version" != "$latest_version" ]; then
+    if [ -n "$latest_version" ] && [ "$current_version" != "$latest_version" ]; then
         echo "New version $latest_version available!"
         echo "Run: curl -sSL https://raw.githubusercontent.com/amenophis1er/mktools/main/install/install.sh | bash"
     fi
@@ -108,14 +115,25 @@ function install_target() {
         return 0
     fi
 
-    # Add includes at the top of the Makefile
+    # Find the first non-comment, non-empty line
+    local first_line=$(grep -v '^#' "$makefile" | grep -v '^[[:space:]]*$' | head -n 1)
+
+    # Add includes before the first real content, preserving any comments at the top
     temp_file=$(mktemp)
-    echo "# Added by mktools" > "$temp_file"
+    if [ -n "$first_line" ]; then
+        sed -n "1,/^$first_line/p" "$makefile" | sed '$d' > "$temp_file"
+    fi
+    echo "# Added by mktools" >> "$temp_file"
     echo "mktools_path := $MKTOOLS_DIR" >> "$temp_file"
     echo "include \$(mktools_path)/common/*.mk" >> "$temp_file"
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
-    cat "$makefile" >> "$temp_file"
+    if [ -n "$first_line" ]; then
+        echo "$first_line" >> "$temp_file"
+        sed -n "/^$first_line/,\$p" "$makefile" | sed '1d' >> "$temp_file"
+    else
+        cat "$makefile" >> "$temp_file"
+    fi
     mv "$temp_file" "$makefile"
 
     echo -e "${GREEN}Target $target installed successfully${NC}"
