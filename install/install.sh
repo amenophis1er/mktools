@@ -115,25 +115,17 @@ function install_target() {
         return 0
     fi
 
-    # Find the first non-comment, non-empty line
-    local first_line=$(grep -v '^#' "$makefile" | grep -v '^[[:space:]]*$' | head -n 1)
-
-    # Add includes before the first real content, preserving any comments at the top
+    # Create temp file and add mktools includes right after the first line
     temp_file=$(mktemp)
-    if [ -n "$first_line" ]; then
-        sed -n "1,/^$first_line/p" "$makefile" | sed '$d' > "$temp_file"
-    fi
+    head -n 1 "$makefile" > "$temp_file"
+    echo "" >> "$temp_file"
     echo "# Added by mktools" >> "$temp_file"
     echo "mktools_path := $MKTOOLS_DIR" >> "$temp_file"
     echo "include \$(mktools_path)/common/*.mk" >> "$temp_file"
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
-    if [ -n "$first_line" ]; then
-        echo "$first_line" >> "$temp_file"
-        sed -n "/^$first_line/,\$p" "$makefile" | sed '1d' >> "$temp_file"
-    else
-        cat "$makefile" >> "$temp_file"
-    fi
+    tail -n +2 "$makefile" >> "$temp_file"
+
     mv "$temp_file" "$makefile"
 
     echo -e "${GREEN}Target $target installed successfully${NC}"
