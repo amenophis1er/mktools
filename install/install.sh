@@ -115,16 +115,22 @@ function install_target() {
         return 0
     fi
 
-    # Create temp file and add mktools includes right after the first line
+    # Create temp file
     temp_file=$(mktemp)
-    head -n 1 "$makefile" > "$temp_file"
+
+    # Add PHONY declarations first if they exist
+    grep "^\.PHONY:" "$makefile" > "$temp_file"
+
+    # Add mktools includes
     echo "" >> "$temp_file"
     echo "# Added by mktools" >> "$temp_file"
     echo "mktools_path := $MKTOOLS_DIR" >> "$temp_file"
     echo "include \$(mktools_path)/common/*.mk" >> "$temp_file"
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
-    tail -n +2 "$makefile" >> "$temp_file"
+
+    # Add the rest of the file, excluding the PHONY declarations we already added
+    grep -v "^\.PHONY:" "$makefile" >> "$temp_file"
 
     mv "$temp_file" "$makefile"
 

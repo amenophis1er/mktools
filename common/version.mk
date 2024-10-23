@@ -1,6 +1,6 @@
 MKTOOLS_VERSION := 0.1.0
 
-# Version check function - don't make it the default target
+# Version check function - explicitly not the default target
 .PHONY: version_check
 version_check:
 	@echo "mktools version $(MKTOOLS_VERSION)"
