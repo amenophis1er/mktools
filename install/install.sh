@@ -118,19 +118,27 @@ function install_target() {
     # Create temp file
     temp_file=$(mktemp)
 
-    # Add PHONY declarations first if they exist
-    grep "^\.PHONY:" "$makefile" > "$temp_file"
+    # Preserve any comments at the start of the file
+    sed -n '/^[[:space:]]*#/p' "$makefile" > "$temp_file"
+
+    # Add PHONY declarations
+    grep "^\.PHONY:" "$makefile" >> "$temp_file"
 
     # Add mktools includes
     echo "" >> "$temp_file"
     echo "# Added by mktools" >> "$temp_file"
     echo "mktools_path := $MKTOOLS_DIR" >> "$temp_file"
-    echo "include \$(mktools_path)/common/*.mk" >> "$temp_file"
+    echo "include \$(mktools_path)/common/colors.mk" >> "$temp_file"
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
 
-    # Add the rest of the file, excluding the PHONY declarations we already added
-    grep -v "^\.PHONY:" "$makefile" >> "$temp_file"
+    # Add the default target if it exists (preserving its position)
+    grep "^default:" "$makefile" >> "$temp_file"
+
+    # Add the rest of the file, excluding what we've already added
+    grep -v "^\.PHONY:" "$makefile" | \
+    grep -v "^default:" | \
+    grep -v "^[[:space:]]*#" >> "$temp_file"
 
     mv "$temp_file" "$makefile"
 
