@@ -118,45 +118,57 @@ function install_target() {
     # Create temp file
     temp_file=$(mktemp)
 
-    # Preserve any comments at the start of the file
+    # Start with comments
     sed -n '/^[[:space:]]*#/p' "$makefile" > "$temp_file"
 
-    # Add PHONY declarations if they exist
+    # Add PHONY declarations
     grep "^\.PHONY:" "$makefile" >> "$temp_file" 2>/dev/null || true
-
-    # Initialize help structure if it doesn't exist
-    if ! grep -q "^HELP_TEXT :=" "$makefile"; then
-        echo "" >> "$temp_file"
-        echo "HELP_TEXT := Available targets:" >> "$temp_file"
-    fi
+    echo "" >> "$temp_file"
 
     # Add mktools includes
-    echo "" >> "$temp_file"
     echo "# Added by mktools" >> "$temp_file"
     echo "mktools_path := $MKTOOLS_DIR" >> "$temp_file"
     echo "include \$(mktools_path)/common/colors.mk" >> "$temp_file"
     echo "include \$(mktools_path)/targets/$target/*.mk" >> "$temp_file"
     echo "" >> "$temp_file"
 
+    # Initialize help structure if it doesn't exist
+    if ! grep -q "^HELP_TEXT :=" "$makefile"; then
+        echo "HELP_TEXT := Available targets:" >> "$temp_file"
+    else
+        # Copy existing HELP_TEXT initialization
+        grep "^HELP_TEXT :=" "$makefile" >> "$temp_file"
+    fi
+
+    # Copy existing HELP_TEXT additions
+    grep "^HELP_TEXT +=" "$makefile" >> "$temp_file" 2>/dev/null || true
+    echo "" >> "$temp_file"
+
     # Add help target if it doesn't exist
     if ! grep -q "^help:" "$makefile"; then
-        echo "" >> "$temp_file"
-        echo ".PHONY: help" >> "$temp_file"
         echo "help:" >> "$temp_file"
         echo -e "\t@echo \"\$(HELP_TEXT)\"" >> "$temp_file"
         echo "" >> "$temp_file"
+    else
+        # Copy existing help target
+        sed -n '/^help:/,/^[^[:space:]]/p' "$makefile" | sed '$d' >> "$temp_file"
+        echo "" >> "$temp_file"
     fi
 
-    # Add the default target if it exists (preserving its position)
-    grep "^default:" "$makefile" >> "$temp_file" 2>/dev/null || true
-
-    # Add the rest of the file content, excluding what we've already processed
+    # Add remaining targets and their recipes while excluding what we've already processed
     grep -v "^\.PHONY:" "$makefile" | \
-    grep -v "^HELP_TEXT :=" | \
+    grep -v "^HELP_TEXT" | \
     grep -v "^help:" | \
-    grep -v "^default:" | \
     grep -v "^[[:space:]]*#" | \
-    grep -v "^[[:space:]]*$" >> "$temp_file"
+    grep -v "^include.*mktools" | \
+    grep -v "^mktools_path :=" | \
+    grep -v "^[[:space:]]*$" | \
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[a-zA-Z0-9._-]+: ]]; then
+            echo "" >> "$temp_file"  # Add blank line before each target
+        fi
+        echo "$line" >> "$temp_file"
+    done
 
     # Clean up any duplicate blank lines
     awk 'NF {p=1} p' "$temp_file" > "$temp_file.clean"
