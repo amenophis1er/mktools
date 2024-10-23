@@ -14,4 +14,4 @@ release:
 
 help:
 	@echo "Available targets:"
-	@echo "  release          Create a new release/tag and push it (e.g., make release VERSION=1.0.0)"
+	@echo "  - release          Create a new release/tag and push it (e.g., make release VERSION=1.0.0)"

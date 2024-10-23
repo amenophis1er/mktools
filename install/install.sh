@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Enhanced install.sh
 VERSION=${1:-latest}
 INSTALL_DIR="$HOME/.local/share/mktools"
 BIN_DIR="$HOME/.local/bin"
+REPO_URL="https://github.com/amenophis1er/mktools"
 
 # Colors for output
 RED='\033[0;31m'
@@ -21,18 +21,22 @@ echo -e "${CYAN}Creating directories...${NC}"
 mkdir -p "$INSTALL_DIR" || { echo -e "${RED}Failed to create $INSTALL_DIR${NC}"; exit 1; }
 mkdir -p "$BIN_DIR" || { echo -e "${RED}Failed to create $BIN_DIR${NC}"; exit 1; }
 
-# Download and extract
-echo -e "${CYAN}Downloading version ${VERSION}...${NC}"
-if [ "$VERSION" = "latest" ]; then
-    DOWNLOAD_URL=$(curl -s https://api.github.com/repos/amenophis1er/mktools/releases/latest | \
-        grep "browser_download_url.*tar.gz" | cut -d '"' -f 4)
-else
-    # Make sure VERSION starts with 'v'
-    [[ $VERSION == v* ]] || VERSION="v$VERSION"
-    DOWNLOAD_URL="https://github.com/amenophis1er/mktools/releases/download/${VERSION}/mktools-${VERSION}.tar.gz"
-fi
+# Clone repository
+echo -e "${CYAN}Cloning repository...${NC}"
+rm -rf "$INSTALL_DIR.tmp"
+git clone "$REPO_URL" "$INSTALL_DIR.tmp" || {
+    echo -e "${RED}Failed to clone repository${NC}"
+    exit 1
+}
 
-echo "Download URL: $DOWNLOAD_URL"
+# Copy files to installation directory
+echo -e "${CYAN}Installing files...${NC}"
+rsync -a --delete "$INSTALL_DIR.tmp/" "$INSTALL_DIR/" || {
+    echo -e "${RED}Failed to copy files${NC}"
+    rm -rf "$INSTALL_DIR.tmp"
+    exit 1
+}
+rm -rf "$INSTALL_DIR.tmp"
 
 # Install version file
 echo "$VERSION" > "$INSTALL_DIR/VERSION"
