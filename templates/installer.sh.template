@@ -150,8 +150,41 @@ install_target() {
 
 # Main installation
 main() {
+
+    # Detect if we're running in a pipe
+    if [ -t 0 ]; then
+        # Running interactively
+        INTERACTIVE=true
+    else
+        # Running in a pipe
+        INTERACTIVE=false
+    fi
+
     echo -e "${CYAN}Welcome to mktools installer${NC}"
     echo -e "${CYAN}Will install in current directory: $(pwd)${NC}"
+
+    # Only ask for confirmation if running interactively
+    if [ "$INTERACTIVE" = true ]; then
+        local confirm
+        while true; do
+            echo -n "Continue with installation? [Y/n] "
+            read -r confirm
+            confirm=${confirm:-Y}
+            if [[ "$confirm" =~ ^[YyNn]$ ]]; then
+                break
+            fi
+            echo "Please answer Y or N"
+        done
+
+        if [[ "$confirm" =~ ^[Nn]$ ]]; then
+            echo -e "${YELLOW}Installation cancelled${NC}"
+            exit 0
+        fi
+    else
+        # When piped, proceed automatically after a short delay
+        echo "Installing automatically in 3 seconds..."
+        sleep 3
+    fi
 
     local confirm
     while true; do
