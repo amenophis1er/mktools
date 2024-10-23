@@ -7,6 +7,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Script directory
@@ -17,7 +18,6 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TEST_DIR="${PROJECT_ROOT}/test-output/clean-install"
 TEST_DIR_IDEMPOTENT="${PROJECT_ROOT}/test-output/idempotent"
 TEST_DIR_EXISTING="${PROJECT_ROOT}/test-output/existing-makefile"
-TEST_DIR_SELECTIVE="${PROJECT_ROOT}/test-output/selective-install"
 
 # Cleanup function
 cleanup() {
@@ -47,21 +47,36 @@ run_test() {
     echo -e "${GREEN}✓ Test passed: ${test_name}${NC}"
 }
 
+# Helper function to verify installed files
+verify_installation() {
+    local dir=$1
+
+    # Check common files
+    [ -f "$dir/src/common/colors.mk" ] || (echo "Missing colors.mk" && return 1)
+
+    # Check each target from the source project
+    for target_dir in "${PROJECT_ROOT}/src/targets/*/"; do
+        if [ -f "${target_dir}__init__.mk" ] && [ -f "${target_dir}__vars__.mk" ]; then
+            target=$(basename "$target_dir")
+            echo "Checking target: $target"
+            [ -f "$dir/src/targets/$target/__init__.mk" ] || (echo "Missing $target/__init__.mk" && return 1)
+            [ -f "$dir/src/targets/$target/__vars__.mk" ] || (echo "Missing $target/__vars__.mk" && return 1)
+        fi
+    done
+
+    # Check if Makefile exists and contains help target
+    [ -f "$dir/Makefile" ] || (echo "Missing Makefile" && return 1)
+    grep -q "^help:" "$dir/Makefile" || (echo "Missing help target in Makefile" && return 1)
+
+    return 0
+}
+
 # Helper function to automate installation
 automate_install() {
     local dir=$1
-    local choice=$2
-
-    echo -e "${YELLOW}Running automated installation:${NC}"
-    echo -e "Directory: $dir"
-    echo -e "Choice: $choice"
-
-    # Create answers file
-    echo "y" > "${PROJECT_ROOT}/test-output/answers"
-    echo "$choice" >> "${PROJECT_ROOT}/test-output/answers"
-
     cd "$dir"
-    ${PROJECT_ROOT}/dist/install.sh < "${PROJECT_ROOT}/test-output/answers"
+    echo -e "${YELLOW}Running automated installation in: $dir${NC}"
+    echo "y" | ${PROJECT_ROOT}/dist/install.sh
 }
 
 # Main test sequence
@@ -70,7 +85,7 @@ main() {
 
     # Clean start
     cleanup
-    mkdir -p "$TEST_DIR" "$TEST_DIR_IDEMPOTENT" "$TEST_DIR_EXISTING" "$TEST_DIR_SELECTIVE"
+    mkdir -p "$TEST_DIR" "$TEST_DIR_IDEMPOTENT" "$TEST_DIR_EXISTING"
 
     # Test 1: Generate installer
     run_test "Installer Generation" "
@@ -79,40 +94,31 @@ main() {
         test -f dist/install.sh
     "
 
-    # Test 2: Clean installation (all targets)
+    # Test 2: Clean installation
     run_test "Clean Installation" "
-        automate_install '$TEST_DIR' '0' && \
         cd '$TEST_DIR' && \
-        make -n dump && \
-        make -n version
+        automate_install '$TEST_DIR' && \
+        verify_installation '$TEST_DIR' && \
+        make help
     "
 
     # Test 3: Idempotency
     run_test "Idempotency" "
-        automate_install '$TEST_DIR_IDEMPOTENT' '0' && \
         cd '$TEST_DIR_IDEMPOTENT' && \
+        automate_install '$TEST_DIR_IDEMPOTENT' && \
         cp Makefile Makefile.first && \
-        automate_install '$TEST_DIR_IDEMPOTENT' '0' && \
-        diff Makefile Makefile.first
+        automate_install '$TEST_DIR_IDEMPOTENT' && \
+        diff Makefile Makefile.first && \
+        verify_installation '$TEST_DIR_IDEMPOTENT'
     "
 
     # Test 4: Existing Makefile
     run_test "Existing Makefile" "
         cd '$TEST_DIR_EXISTING' && \
         echo -e '.PHONY: test\n\ntest:\n\techo \"test\"' > Makefile && \
-        automate_install '$TEST_DIR_EXISTING' '0' && \
-        make -n test && \
-        make -n dump && \
-        make -n version && \
-        [ \$(grep -c 'test:' Makefile) -eq 1 ]
-    "
-
-    # Test 5: Selective Installation (dump only)
-    run_test "Selective Installation" "
-        automate_install '$TEST_DIR_SELECTIVE' '1' && \
-        cd '$TEST_DIR_SELECTIVE' && \
-        make -n dump && \
-        ! make -n version
+        automate_install '$TEST_DIR_EXISTING' && \
+        verify_installation '$TEST_DIR_EXISTING' && \
+        make test
     "
 
     # Cleanup

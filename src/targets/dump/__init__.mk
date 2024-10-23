@@ -1,3 +1,9 @@
+# active: true
+# help: Create a context dump of the project structure
+# dependencies: colors
+
+include src/targets/dump/__vars__.mk
+
 # Get the current folder name
 CURRENT_FOLDER := $(notdir $(CURDIR))
 

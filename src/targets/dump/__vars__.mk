@@ -24,6 +24,3 @@ CONTENT_EXCLUDE_EXT := \
     rtf odt ods odp \
     csv json xml yml yaml \
     txt md
-
-# Update help text
-HELP_TEXT += "\n  dump           - Create a context dump of the project structure"
