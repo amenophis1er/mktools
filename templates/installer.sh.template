@@ -150,21 +150,9 @@ install_target() {
 
 # Main installation
 main() {
-
     # Detect if we're running in a pipe
     if [ -t 0 ]; then
         # Running interactively
-        INTERACTIVE=true
-    else
-        # Running in a pipe
-        INTERACTIVE=false
-    fi
-
-    echo -e "${CYAN}Welcome to mktools installer${NC}"
-    echo -e "${CYAN}Will install in current directory: $(pwd)${NC}"
-
-    # Only ask for confirmation if running interactively
-    if [ "$INTERACTIVE" = true ]; then
         local confirm
         while true; do
             echo -n "Continue with installation? [Y/n] "
@@ -181,41 +169,20 @@ main() {
             exit 0
         fi
     else
-        # When piped, proceed automatically after a short delay
-        echo "Installing automatically in 3 seconds..."
-        sleep 3
-    fi
-
-    local confirm
-    while true; do
-        echo -n "Continue with installation? [Y/n] "
-        read -r confirm
-        confirm=${confirm:-Y}
-        if [[ "$confirm" =~ ^[YyNn]$ ]]; then
-            break
-        fi
-        echo "Please answer Y or N"
-    done
-
-    if [[ "$confirm" =~ ^[Nn]$ ]]; then
-        echo -e "${YELLOW}Installation cancelled${NC}"
-        exit 0
+        # When piped, proceed automatically
+        echo "Non-interactive mode detected - proceeding with installation"
     fi
 
     echo -e "${CYAN}Proceeding with installation...${NC}"
 
-    # Create src directory structure
-    mkdir -p src/common
-    mkdir -p src/targets
-
-    # Create temporary file for Makefile content
-    local temp_file=$(mktemp)
+    # Rest of the installation code...
+    mkdir -p src/common src/targets
 
     # Install common files
     echo -e "${CYAN}Installing common files...${NC}"
     decode_content "$COLORS_MK" > "src/common/colors.mk"
 
-    # Find and install all available targets
+    # Find and install all targets
     for target_dir in src/targets/*/; do
         if [ -d "$target_dir" ]; then
             target=$(basename "$target_dir")
@@ -228,8 +195,7 @@ main() {
     done
 
     # Update Makefile
-    update_makefile "$temp_file"
-    rm -f "$temp_file"
+    update_makefile
 
     echo -e "${GREEN}Installation complete!${NC}"
     echo "You can now use 'make help' to see available targets"
