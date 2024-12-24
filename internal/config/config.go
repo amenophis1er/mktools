@@ -1,3 +1,27 @@
+// Example project-specific config structure for reference:
+/*
+# .mktools.yaml - Project-specific configuration
+llm:
+  provider: anthropic  # LLM provider (anthropic, openai)
+  model: claude-3-sonnet  # Model to use
+  api_key: ""  # Optional: Override API key
+
+context:
+  output_format: md  # Output format (md, txt)
+  ignore_patterns:  # Additional patterns to ignore
+    - "*.tmp"
+    - "build/*"
+    - "tests/fixtures/*"
+  max_file_size: 1MB  # Maximum file size to include
+  include_file_structure: true  # Include directory structure
+  include_file_content: true   # Include file contents
+  exclude_extensions:  # File extensions to exclude
+    - ".exe"
+    - ".dll"
+    - ".so"
+  max_files_to_include: 100  # Maximum number of files to process
+*/
+
 package config
 
 import (
