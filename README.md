@@ -12,13 +12,65 @@ mktools is a Swiss Army knife for development tasks, focusing on generating cont
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/amenophis1er/mktools.git
+### Option 1: Homebrew (macOS/Linux)
 
-# Build and install
-cd mktools
-go install
+```bash
+# Install
+brew tap amenophis1er/mktools
+brew install mktools
+
+# Update
+brew upgrade mktools
+```
+
+### Option 2: Direct Download
+
+Download the latest binary for your platform:
+
+```bash
+# macOS (Intel)
+curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-darwin-amd64 -o /usr/local/bin/mktools && chmod +x /usr/local/bin/mktools
+
+# macOS (Apple Silicon)
+curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-darwin-arm64 -o /usr/local/bin/mktools && chmod +x /usr/local/bin/mktools
+
+# Linux (x86_64)
+curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-linux-amd64 -o /usr/local/bin/mktools && chmod +x /usr/local/bin/mktools
+
+# Linux (ARM64)
+curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-linux-arm64 -o /usr/local/bin/mktools && chmod +x /usr/local/bin/mktools
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri https://github.com/amenophis1er/mktools/releases/latest/download/mktools-windows-amd64.exe -OutFile mktools.exe
+```
+
+### Option 3: Go Install
+
+```bash
+go install github.com/amenophis1er/mktools@latest
+```
+
+## Version Management
+
+mktools includes built-in version management features:
+
+```bash
+# Check current version
+mktools version
+
+# The tool automatically checks for updates and notifies you when a new version is available
+```
+
+## Verification
+
+All releases include SHA-256 checksums for verification:
+
+```bash
+# Download checksums
+curl -L https://github.com/amenophis1er/mktools/releases/latest/download/checksums.txt -O
+
+# Verify binary (adjust filename for your platform)
+sha256sum -c checksums.txt --ignore-missing
 ```
 
 ## Quick Start

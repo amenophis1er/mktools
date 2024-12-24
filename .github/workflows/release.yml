@@ -1,0 +1,87 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required for version information
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          # Build with version information
+          VERSION=${{ steps.vars.outputs.VERSION }}
+          COMMIT=${{ steps.vars.outputs.COMMIT }}
+          DATE=${{ steps.vars.outputs.DATE }}
+          
+          LDFLAGS="-X github.com/amenophis1er/mktools/version.Version=${VERSION} \
+                  -X github.com/amenophis1er/mktools/version.Commit=${COMMIT} \
+                  -X github.com/amenophis1er/mktools/version.Date=${DATE}"
+
+          # Build for each platform
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mktools-darwin-amd64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o mktools-darwin-arm64
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mktools-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o mktools-linux-arm64
+          GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mktools-windows-amd64.exe
+
+      - name: Generate checksums
+        run: |
+          sha256sum mktools-* > checksums.txt
+
+      - name: Update Homebrew formula
+        run: |
+          # Update version in formula
+          sed -i "s/version \".*\"/version \"${{ steps.vars.outputs.VERSION }}\"/" Formula/mktools.rb
+          
+          # Update checksums
+          for platform in darwin-arm64 darwin-amd64 linux-amd64; do
+            checksum=$(sha256sum mktools-$platform | cut -d ' ' -f 1)
+            sed -i "s/sha256 \"...\" # $platform/sha256 \"$checksum\" # $platform/" Formula/mktools.rb
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            mktools-*
+            checksums.txt
+          body: |
+            Release ${{ steps.vars.outputs.VERSION }}
+            
+            ### SHA-256 Checksums
+            ```
+            $(cat checksums.txt)
+            ```
+            
+            ### Installation
+            ```bash
+            # Homebrew (macOS/Linux)
+            brew tap amenophis1er/mktools
+            brew install mktools
+
+            # Direct download (all platforms)
+            curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o mktools
+
+            # Go install
+            go install github.com/amenophis1er/mktools@latest
+            ```

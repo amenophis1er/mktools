@@ -7,6 +7,7 @@ import (
 
 	"github.com/amenophis1er/mktools/internal/config"
 	"github.com/amenophis1er/mktools/internal/plugin"
+	"github.com/amenophis1er/mktools/internal/update"
 	"github.com/amenophis1er/mktools/plugins/context"
 	"github.com/spf13/cobra"
 )
@@ -45,6 +46,9 @@ Use "mktools [command] --help" for more information about a command.`,
 
 	// Add global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/mktools/config.yaml)")
+
+	// Add version command
+	rootCmd.AddCommand(newVersionCmd())
 
 	// Add context command
 	contextCmd := &cobra.Command{
@@ -177,6 +181,17 @@ compared to the global configuration.`,
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configDiffCmd)
 	rootCmd.AddCommand(configCmd)
+
+	// Check for updates in the background
+	go func() {
+		hasUpdate, newVersion, err := update.CheckForUpdate()
+		if err != nil {
+			return
+		}
+		if hasUpdate {
+			fmt.Fprintf(os.Stderr, "\nNew version %s available! Run 'mktools version' for update instructions.\n", newVersion)
+		}
+	}()
 
 	return rootCmd.Execute()
 }
