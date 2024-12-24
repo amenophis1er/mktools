@@ -99,8 +99,8 @@ func (p *ContextPlugin) Execute(ctx context.Context, cmd *cobra.Command, args []
 		return fmt.Errorf("failed to detect project info: %w", err)
 	}
 
-	// Collect files
-	files, err := p.collectFiles(path)
+	// Collect files with options
+	files, err := p.collectFiles(path, opts)
 	if err != nil {
 		return fmt.Errorf("failed to collect files: %w", err)
 	}
@@ -265,11 +265,22 @@ func detectProject(path string) (*ProjectInfo, error) {
 	return info, nil
 }
 
-func (p *ContextPlugin) collectFiles(root string) (map[string]string, error) {
+func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[string]string, error) {
 	files := make(map[string]string)
 	maxSize, err := filesize.Parse(p.config.Context.MaxFileSize)
 	if err != nil {
 		return nil, fmt.Errorf("invalid max file size: %w", err)
+	}
+
+	// Combine config ignore patterns with additional ones from command line
+	ignorePatterns := make([]string, 0, len(p.config.Context.IgnorePatterns)+len(opts.AdditionalIgnores))
+	ignorePatterns = append(ignorePatterns, p.config.Context.IgnorePatterns...)
+	ignorePatterns = append(ignorePatterns, opts.AdditionalIgnores...)
+
+	// Determine max files to process
+	maxFiles := p.config.Context.MaxFilesToInclude
+	if opts.MaxFiles > 0 {
+		maxFiles = opts.MaxFiles
 	}
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -279,7 +290,7 @@ func (p *ContextPlugin) collectFiles(root string) (map[string]string, error) {
 
 		// Skip directories
 		if info.IsDir() {
-			for _, pattern := range p.config.Context.IgnorePatterns {
+			for _, pattern := range ignorePatterns {
 				if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
 					return filepath.SkipDir
 				}
@@ -293,8 +304,17 @@ func (p *ContextPlugin) collectFiles(root string) (map[string]string, error) {
 		}
 
 		// Check if path matches any ignore patterns
-		for _, pattern := range p.config.Context.IgnorePatterns {
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+
+		for _, pattern := range ignorePatterns {
 			if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
+				return nil
+			}
+			// Also try matching against the full relative path
+			if matched, _ := filepath.Match(pattern, relPath); matched {
 				return nil
 			}
 		}
@@ -318,16 +338,10 @@ func (p *ContextPlugin) collectFiles(root string) (map[string]string, error) {
 			return nil
 		}
 
-		// Store relative path and content
-		relPath, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-
 		files[relPath] = string(content)
 
 		// Check if we've hit the max files limit
-		if len(files) >= p.config.Context.MaxFilesToInclude {
+		if maxFiles > 0 && len(files) >= maxFiles {
 			return io.EOF
 		}
 
@@ -336,7 +350,7 @@ func (p *ContextPlugin) collectFiles(root string) (map[string]string, error) {
 
 	if err == io.EOF {
 		// We hit the max files limit
-		fmt.Printf("Warning: Only including first %d files due to limit\n", p.config.Context.MaxFilesToInclude)
+		fmt.Printf("Warning: Only including first %d files due to limit\n", maxFiles)
 		return files, nil
 	}
 
