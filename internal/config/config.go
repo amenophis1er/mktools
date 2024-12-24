@@ -51,6 +51,7 @@ func DefaultConfig() *Config {
 				".git/",
 				"node_modules/",
 				"vendor/",
+				".idea/",
 				"*.pyc",
 				"*.pyo",
 				"*.so",
