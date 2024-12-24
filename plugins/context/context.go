@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/amenophis1er/mktools/internal/config"
 	"github.com/amenophis1er/mktools/internal/filesize"
@@ -275,10 +276,17 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 		return nil, fmt.Errorf("invalid max file size: %w", err)
 	}
 
-	// Combine config ignore patterns with additional ones from command line
-	ignorePatterns := make([]string, 0, len(p.config.Context.IgnorePatterns)+len(opts.AdditionalIgnores))
+	// Get project-specific ignores
+	projectIgnores := getProjectSpecificIgnores(root)
+
+	// Combine all ignore patterns
+	ignorePatterns := make([]string, 0,
+		len(p.config.Context.IgnorePatterns)+
+			len(opts.AdditionalIgnores)+
+			len(projectIgnores))
 	ignorePatterns = append(ignorePatterns, p.config.Context.IgnorePatterns...)
 	ignorePatterns = append(ignorePatterns, opts.AdditionalIgnores...)
+	ignorePatterns = append(ignorePatterns, projectIgnores...)
 
 	// Determine max files to process
 	maxFiles := p.config.Context.MaxFilesToInclude
@@ -291,59 +299,39 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 			return err
 		}
 
-		// Skip directories
-		if info.IsDir() {
-			for _, pattern := range ignorePatterns {
-				if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
-					return filepath.SkipDir
-				}
-			}
-			return nil
-		}
-
-		// Skip files larger than max size
-		if info.Size() > maxSize {
-			return nil
-		}
-
-		// Check if path matches any ignore patterns
+		// Get relative path for pattern matching
 		relPath, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
 
-		for _, pattern := range ignorePatterns {
-			if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
-				return nil
+		// Skip directories based on patterns
+		if info.IsDir() {
+			if shouldIgnorePath(relPath, ignorePatterns) {
+				return filepath.SkipDir
 			}
-			// Also try matching against the full relative path
-			if matched, _ := filepath.Match(pattern, relPath); matched {
-				return nil
-			}
+			return nil
 		}
 
-		// Check file extension
-		ext := strings.ToLower(filepath.Ext(path))
-		for _, excluded := range p.config.Context.ExcludeExtensions {
-			if ext == excluded {
-				return nil
-			}
+		// Skip files based on size, patterns, and type
+		if shouldSkipFile(relPath, info, maxSize, ignorePatterns) {
+			return nil
 		}
 
-		// Read file content
+		// Read and check file content
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil // Skip files we can't read
 		}
 
-		// Skip if file contains our metadata marker or is binary
-		if shouldSkipFile(path, content) {
+		// Skip binary and special files
+		if !isTextContent(content) {
 			return nil
 		}
 
 		files[relPath] = string(content)
 
-		// Check if we've hit the max files limit
+		// Check max files limit
 		if maxFiles > 0 && len(files) >= maxFiles {
 			return io.EOF
 		}
@@ -352,7 +340,6 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 	})
 
 	if err == io.EOF {
-		// We hit the max files limit
 		fmt.Printf("Warning: Only including first %d files due to limit\n", maxFiles)
 		return files, nil
 	}
@@ -360,18 +347,130 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 	return files, err
 }
 
-func shouldSkipFile(path string, content []byte) bool {
-	// Skip binary files
-	if !isText(content) {
+func shouldIgnorePath(path string, patterns []string) bool {
+	// Always ignore .git directory and its contents
+	if path == ".git" || strings.HasPrefix(path, ".git/") {
 		return true
 	}
 
-	// Skip if file contains our metadata marker
-	if bytes.Contains(content, []byte(metadata.MetadataMarker)) {
-		return true
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, path); matched {
+			return true
+		}
+		// Handle directory patterns that end with "/"
+		if strings.HasSuffix(pattern, "/") {
+			if matched, _ := filepath.Match(pattern[:len(pattern)-1], path); matched {
+				return true
+			}
+		}
 	}
-
 	return false
+}
+
+func shouldSkipFile(path string, info os.FileInfo, maxSize int64, patterns []string) bool {
+	// Check size
+	if info.Size() > maxSize {
+		return true
+	}
+
+	// Check patterns
+	if shouldIgnorePath(path, patterns) {
+		return true
+	}
+
+	// Check extension for binary/non-text files
+	ext := strings.ToLower(filepath.Ext(path))
+	return isBinaryExtension(ext)
+}
+
+func isBinaryExtension(ext string) bool {
+	binaryExts := map[string]bool{
+		// Executables
+		".exe": true, ".dll": true, ".so": true, ".dylib": true,
+		// Archives
+		".zip": true, ".tar": true, ".gz": true, ".rar": true, ".7z": true,
+		// Images
+		".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true,
+		".ico": true, ".svg": true, ".webp": true,
+		// Audio/Video
+		".mp3": true, ".wav": true, ".ogg": true, ".mp4": true, ".avi": true,
+		".mov": true, ".wmv": true, ".flv": true,
+		// Documents
+		".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
+		".ppt": true, ".pptx": true,
+		// Other binary formats
+		".bin": true, ".dat": true, ".db": true, ".sqlite": true,
+	}
+	return binaryExts[ext]
+}
+
+func getProjectSpecificIgnores(root string) []string {
+	var ignores []string
+
+	// Node.js project
+	if fileExists(filepath.Join(root, "package.json")) {
+		ignores = append(ignores,
+			"node_modules/",
+			"dist/",
+			"build/",
+			"coverage/",
+			".next/",
+			".nuxt/",
+		)
+	}
+
+	// Go project
+	if fileExists(filepath.Join(root, "go.mod")) {
+		ignores = append(ignores,
+			"vendor/",
+			"bin/",
+			"dist/",
+		)
+	}
+
+	// Python project
+	if fileExists(filepath.Join(root, "requirements.txt")) ||
+		fileExists(filepath.Join(root, "setup.py")) {
+		ignores = append(ignores,
+			"venv/",
+			"env/",
+			"__pycache__/",
+			"*.pyc",
+			"*.pyo",
+			"*.pyd",
+			".Python",
+			"build/",
+			"dist/",
+			"*.egg-info/",
+		)
+	}
+
+	// Java/Maven project
+	if fileExists(filepath.Join(root, "pom.xml")) {
+		ignores = append(ignores,
+			"target/",
+			"*.class",
+			"*.jar",
+		)
+	}
+
+	return ignores
+}
+
+func isTextContent(content []byte) bool {
+	if len(content) == 0 {
+		return true
+	}
+
+	// Check for null bytes which usually indicate binary data
+	for _, b := range content {
+		if b == 0 {
+			return false
+		}
+	}
+
+	// Try to detect text by checking if content is valid UTF-8
+	return utf8.Valid(content)
 }
 
 func (p *ContextPlugin) formatOutput(projectInfo *ProjectInfo, files map[string]string) string {
