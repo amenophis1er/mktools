@@ -35,7 +35,7 @@ type Config struct {
 }
 
 // defaultConfig returns a config with sensible defaults
-func defaultConfig() *Config {
+func DefaultConfig() *Config {
 	return &Config{
 		LLM: LLMConfig{
 			Provider: "anthropic",
@@ -78,7 +78,7 @@ func defaultConfig() *Config {
 
 // Load loads the configuration from files and environment variables
 func Load() (*Config, error) {
-	config := defaultConfig()
+	config := DefaultConfig()
 
 	// Load from global config file
 	globalConfig := filepath.Join(os.Getenv("HOME"), ".config", "mktools", "config.yaml")
@@ -104,6 +104,15 @@ func loadFromFile(path string, config *Config) error {
 	}
 
 	return yaml.Unmarshal(data, config)
+}
+
+// ToString returns a string representation of the config
+func (c *Config) ToString() (string, error) {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return string(data), nil
 }
 
 func applyEnvironmentVariables(config *Config) {
@@ -133,9 +142,9 @@ func validateConfig(config *Config) error {
 	if config.LLM.Model == "" {
 		return fmt.Errorf("LLM model is required")
 	}
-	if config.LLM.APIKey == "" {
-		return fmt.Errorf("LLM API key is required")
-	}
+
+	// Don't validate API key during initialization
+	// API key can be set later via environment variable
 
 	// Validate output format
 	switch config.Context.OutputFormat {

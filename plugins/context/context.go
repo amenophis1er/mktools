@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"os/exec"
@@ -22,10 +23,12 @@ type ContextPlugin struct {
 }
 
 type ContextOptions struct {
-	OutputFile    string
-	StructureOnly bool
-	ContentOnly   bool
-	Format        string
+	OutputFile        string
+	StructureOnly     bool
+	ContentOnly       bool
+	Format            string
+	MaxFiles          int
+	AdditionalIgnores []string
 }
 
 func New(cfg *config.Config) *ContextPlugin {
@@ -283,7 +286,7 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 		maxFiles = opts.MaxFiles
 	}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -410,8 +413,18 @@ func (p *ContextPlugin) formatOutput(projectInfo *ProjectInfo, files map[string]
 		}
 		sort.Strings(paths)
 		for _, path := range paths {
+			// Get file extension safely
 			ext := filepath.Ext(path)
-			output.WriteString(fmt.Sprintf("## %s\n\n```%s\n%s\n```\n\n", path, ext[1:], files[path]))
+			language := ""
+			if len(ext) > 0 {
+				// Remove the dot from extension
+				language = ext[1:]
+			}
+
+			output.WriteString(fmt.Sprintf("## %s\n\n```%s\n%s\n```\n\n",
+				path,
+				language,
+				files[path]))
 		}
 	}
 
