@@ -6,6 +6,10 @@ on:
     tags:
       - 'v*'
 
+# Add this permissions block
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,7 +32,6 @@ jobs:
 
       - name: Build binaries
         run: |
-          # Build with version information
           VERSION=${{ steps.vars.outputs.VERSION }}
           COMMIT=${{ steps.vars.outputs.COMMIT }}
           DATE=${{ steps.vars.outputs.DATE }}
@@ -37,7 +40,6 @@ jobs:
                   -X github.com/amenophis1er/mktools/version.Commit=${COMMIT} \
                   -X github.com/amenophis1er/mktools/version.Date=${DATE}"
 
-          # Build for each platform
           GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mktools-darwin-amd64
           GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o mktools-darwin-arm64
           GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mktools-linux-amd64
@@ -48,16 +50,10 @@ jobs:
         run: |
           sha256sum mktools-* > checksums.txt
 
-      - name: Update Homebrew formula
+      - name: Generate Changelog
+        id: changelog
         run: |
-          # Update version in formula
-          sed -i "s/version \".*\"/version \"${{ steps.vars.outputs.VERSION }}\"/" Formula/mktools.rb
-          
-          # Update checksums
-          for platform in darwin-arm64 darwin-amd64 linux-amd64; do
-            checksum=$(sha256sum mktools-$platform | cut -d ' ' -f 1)
-            sed -i "s/sha256 \"...\" # $platform/sha256 \"$checksum\" # $platform/" Formula/mktools.rb
-          done
+          git tag -l --sort=-v:refname | head -n 2 | tac | xargs -I {} git log --pretty=format:"* %s" {}..HEAD > CHANGELOG.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -65,23 +61,8 @@ jobs:
           files: |
             mktools-*
             checksums.txt
-          body: |
-            Release ${{ steps.vars.outputs.VERSION }}
-            
-            ### SHA-256 Checksums
-            ```
-            $(cat checksums.txt)
-            ```
-            
-            ### Installation
-            ```bash
-            # Homebrew (macOS/Linux)
-            brew tap amenophis1er/mktools
-            brew install mktools
-
-            # Direct download (all platforms)
-            curl -L https://github.com/amenophis1er/mktools/releases/latest/download/mktools-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o mktools
-
-            # Go install
-            go install github.com/amenophis1er/mktools@latest
-            ```
+          body_path: CHANGELOG.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

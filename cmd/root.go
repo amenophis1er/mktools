@@ -40,8 +40,8 @@ It provides various utilities for:
 - Development workflow automation
 
 Use "mktools [command] --help" for more information about a command.`,
-		SilenceErrors: true, // Let main() handle error output
-		SilenceUsage:  true, // Don't show usage on expected errors
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	// Add global flags
