@@ -72,38 +72,49 @@ mktools config init
 mktools config show
 ```
 
+I'll update the Configuration section in the README.md to include the new features.
+
+
 ## Configuration
 
-mktools supports both global and project-specific configuration.
+mktools supports both global and project-specific configurations, allowing you to set defaults globally and override them per project.
 
 ### Global Configuration
 
 The global configuration file is located at `$HOME/.config/mktools/config.yaml`.
 
-Initialize default configuration:
+Initialize default global configuration:
 ```bash
 mktools config init
 ```
 
 ### Project-specific Configuration
 
-Create a `.mktools.yaml` file in your project root to override global settings for that project.
+Create a project-specific `.mktools.yaml` file in your project root to override global settings:
 
-Example `.mktools.yaml`:
-```yaml
-llm:
-  provider: anthropic
-  model: claude-3-sonnet
+```bash
+# Initialize full config with all options
+mktools config init --local
 
-context:
-  output_format: md
-  ignore_patterns:
-    - "*.tmp"
-    - "build/*"
-  max_file_size: 1MB
-  include_file_structure: true
-  include_file_content: true
-  max_files_to_include: 100
+# Initialize minimal config (empty template)
+mktools config init --local --minimal
+
+# Force overwrite existing config
+mktools config init --local --force
+```
+
+### Managing Configurations
+
+View current configuration:
+```bash
+# Show current config
+mktools config show
+
+# Show effective merged configuration (global + local)
+mktools config show --merged
+
+# Show differences between global and local configs
+mktools config diff
 ```
 
 ### Configuration Options
@@ -128,7 +139,42 @@ context:
 | exclude_extensions | Extensions to exclude | [".exe", ".dll", ...] |
 | max_files_to_include | Maximum files to process | 100 |
 
+### Example Configurations
+
+Global configuration (`~/.config/mktools/config.yaml`):
+```yaml
+llm:
+  provider: anthropic
+  model: claude-3-sonnet
+
+context:
+  output_format: md
+  max_file_size: 1MB
+  max_files_to_include: 100
+  ignore_patterns:
+    - ".git/"
+    - "node_modules/"
+    - "vendor/"
+    - ".idea/"
+  exclude_extensions:
+    - ".exe"
+    - ".dll"
+    - ".so"
+```
+
+Project-specific configuration (`.mktools.yaml`):
+```yaml
+# Override only needed settings
+context:
+  ignore_patterns:
+    - "build/*"
+    - "*.tmp"
+  max_file_size: 2MB
+```
+
 ### Environment Variables
+
+Environment variables take precedence over both global and local configurations:
 
 - `MKTOOLS_LLM_PROVIDER`: Override LLM provider
 - `MKTOOLS_LLM_MODEL`: Override LLM model
@@ -167,6 +213,18 @@ mktools automatically excludes:
 - Version control directories
 - Dependency directories
 - Temporary files
+- 
+### Ignore Patterns
+
+mktools uses multiple sources to determine which files to ignore:
+
+1. Built-in patterns (common binary files, build artifacts)
+2. Project-specific `.mktools.yaml` configuration
+3. `.gitignore` patterns in your project
+4. Command-line `--ignore` patterns
+5. Project-type specific patterns (e.g., node_modules for Node.js projects)
+
+The patterns are processed in order, with later patterns taking precedence. `.gitignore` patterns are automatically respected, meaning any files ignored by Git will also be ignored by mktools.
 
 ## Development
 

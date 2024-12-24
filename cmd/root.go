@@ -100,40 +100,74 @@ By default, binary files, large files, and common build artifacts are excluded.`
 
 	// Add config command
 	configCmd := &cobra.Command{
-		Use:   "config [command]",
+		Use:   "config",
 		Short: "Manage mktools configuration",
 		Long: `Manage mktools configuration settings.
 
 Available Commands:
-  init    Initialize default configuration file
-  show    Display current configuration`,
+  init    Initialize configuration file
+  show    Display current configuration
+  diff    Show differences between global and local config`,
 	}
 
 	configInitCmd := &cobra.Command{
-		Use:   "init",
+		Use:   "init [--local] [--minimal] [--force]",
 		Short: "Initialize configuration file",
 		Long: `Initialize a new configuration file with default settings.
-The configuration file will be created at $HOME/.config/mktools/config.yaml
-if it doesn't already exist.`,
+Without flags, the configuration file will be created at $HOME/.config/mktools/config.yaml.
+With --local flag, it will create .mktools.yaml in the current directory.`,
+		Example: `  # Initialize global config
+  mktools config init
+
+  # Initialize local project config
+  mktools config init --local
+
+  # Initialize minimal local config (only override specific settings)
+  mktools config init --local --minimal
+
+  # Force overwrite existing config
+  mktools config init --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := initializeConfig(); err != nil {
+			local, _ := cmd.Flags().GetBool("local")
+			minimal, _ := cmd.Flags().GetBool("minimal")
+			force, _ := cmd.Flags().GetBool("force")
+			if err := initializeConfig(local, minimal, force); err != nil {
 				return fmt.Errorf("failed to initialize config: %w", err)
 			}
 			return nil
 		},
 	}
 
+	configInitCmd.Flags().Bool("local", false, "create config file in current directory")
+	configInitCmd.Flags().Bool("minimal", false, "create minimal config with only overridden settings")
+	configInitCmd.Flags().Bool("force", false, "overwrite existing config file")
+
 	configShowCmd := &cobra.Command{
-		Use:   "show",
+		Use:   "show [--merged]",
 		Short: "Show current configuration",
 		Long: `Display the current active configuration settings.
-This includes both default values and any overrides from:
-- Global config file ($HOME/.config/mktools/config.yaml)
-- Local config file (.mktools.yaml)
-- Environment variables`,
+By default, shows the configuration file specified.
+With --merged flag, shows the effective configuration after merging global and local settings.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := showConfig(); err != nil {
+			merged, _ := cmd.Flags().GetBool("merged")
+			if err := showConfig(merged); err != nil {
 				return fmt.Errorf("failed to show config: %w", err)
+			}
+			return nil
+		},
+	}
+
+	configShowCmd.Flags().Bool("merged", false, "show merged configuration")
+
+	configDiffCmd := &cobra.Command{
+		Use:   "diff",
+		Short: "Show configuration differences",
+		Long: `Compare global and local configuration settings.
+Shows what settings are different in the local configuration
+compared to the global configuration.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := diffConfig(); err != nil {
+				return fmt.Errorf("failed to diff config: %w", err)
 			}
 			return nil
 		},
@@ -141,6 +175,7 @@ This includes both default values and any overrides from:
 
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configShowCmd)
+	configCmd.AddCommand(configDiffCmd)
 	rootCmd.AddCommand(configCmd)
 
 	return rootCmd.Execute()
@@ -162,15 +197,33 @@ func initConfig() {
 	}
 }
 
-func initializeConfig() error {
+func initializeConfig(local, minimal, force bool) error {
 	defaultConfig := config.DefaultConfig()
-	configDir := filepath.Join(os.Getenv("HOME"), ".config", "mktools")
 
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	var configPath string
+	if local {
+		configPath = ".mktools.yaml"
+	} else {
+		configDir := filepath.Join(os.Getenv("HOME"), ".config", "mktools")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "config.yaml")
 	}
 
-	configPath := filepath.Join(configDir, "config.yaml")
+	// Check if file exists and handle force flag
+	if _, err := os.Stat(configPath); err == nil && !force {
+		return fmt.Errorf("config file already exists at %s (use --force to overwrite)", configPath)
+	}
+
+	if minimal && local {
+		// Create minimal config with empty structures
+		defaultConfig = &config.Config{
+			LLM:     config.LLMConfig{},
+			Context: config.ContextConfig{},
+		}
+	}
+
 	if err := defaultConfig.Save(configPath); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -179,16 +232,62 @@ func initializeConfig() error {
 	return nil
 }
 
-func showConfig() error {
+func showConfig(merged bool) error {
 	if cfg == nil {
 		return fmt.Errorf("no configuration loaded")
 	}
 
-	currentConfig, err := cfg.ToString()
+	var configToShow *config.Config
+	if merged {
+		// Get merged config (global + local)
+		var err error
+		configToShow, err = config.LoadMerged()
+		if err != nil {
+			return fmt.Errorf("failed to load merged config: %w", err)
+		}
+	} else {
+		configToShow = cfg
+	}
+
+	output, err := configToShow.ToString()
 	if err != nil {
 		return fmt.Errorf("failed to format config: %w", err)
 	}
 
-	fmt.Println(currentConfig)
+	fmt.Println(output)
+	return nil
+}
+
+func diffConfig() error {
+	// Load global config
+	globalConfig, err := config.LoadGlobal()
+	if err != nil {
+		return fmt.Errorf("failed to load global config: %w", err)
+	}
+
+	// Load local config
+	localConfig, err := config.LoadLocal()
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load local config: %w", err)
+	}
+
+	if localConfig == nil {
+		fmt.Println("No local configuration found")
+		return nil
+	}
+
+	// Compare and show differences
+	diff, err := config.Diff(globalConfig, localConfig)
+	if err != nil {
+		return fmt.Errorf("failed to compare configs: %w", err)
+	}
+
+	if diff == "" {
+		fmt.Println("No differences found between global and local configuration")
+		return nil
+	}
+
+	fmt.Println("Configuration differences (local vs global):")
+	fmt.Println(diff)
 	return nil
 }

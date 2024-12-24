@@ -15,6 +15,7 @@ import (
 
 	"github.com/amenophis1er/mktools/internal/config"
 	"github.com/amenophis1er/mktools/internal/filesize"
+	"github.com/amenophis1er/mktools/internal/ignore"
 	"github.com/amenophis1er/mktools/internal/metadata"
 )
 
@@ -276,17 +277,30 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 		return nil, fmt.Errorf("invalid max file size: %w", err)
 	}
 
-	// Get project-specific ignores
-	projectIgnores := getProjectSpecificIgnores(root)
+	// Create ignore list
+	ignoreList := ignore.New()
 
-	// Combine all ignore patterns
-	ignorePatterns := make([]string, 0,
-		len(p.config.Context.IgnorePatterns)+
-			len(opts.AdditionalIgnores)+
-			len(projectIgnores))
-	ignorePatterns = append(ignorePatterns, p.config.Context.IgnorePatterns...)
-	ignorePatterns = append(ignorePatterns, opts.AdditionalIgnores...)
-	ignorePatterns = append(ignorePatterns, projectIgnores...)
+	// Add configured ignore patterns
+	ignoreList.AddPatterns(p.config.Context.IgnorePatterns)
+	ignoreList.AddPatterns(opts.AdditionalIgnores)
+
+	// Add the current output file to ignore patterns
+	if opts.OutputFile != "" {
+		ignoreList.AddPattern(filepath.Base(opts.OutputFile))
+	} else {
+		// Add default context files
+		ignoreList.AddPattern("context.md")
+		ignoreList.AddPattern("context.txt")
+	}
+
+	// Load .gitignore if it exists
+	gitignorePath := filepath.Join(root, ".gitignore")
+	if err := ignoreList.LoadGitignore(gitignorePath); err != nil {
+		return nil, fmt.Errorf("error loading .gitignore: %w", err)
+	}
+
+	// Add project-specific ignores
+	ignoreList.AddPatterns(getProjectSpecificIgnores(root))
 
 	// Determine max files to process
 	maxFiles := p.config.Context.MaxFilesToInclude
@@ -305,16 +319,26 @@ func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[str
 			return err
 		}
 
-		// Skip directories based on patterns
+		// Skip directories based on ignore list
 		if info.IsDir() {
-			if shouldIgnorePath(relPath, ignorePatterns) {
+			if ignoreList.ShouldIgnore(relPath) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		// Skip files based on size, patterns, and type
-		if shouldSkipFile(relPath, info, maxSize, ignorePatterns) {
+		// Skip files based on ignore list and other criteria
+		if ignoreList.ShouldIgnore(relPath) {
+			return nil
+		}
+
+		// Skip files based on size
+		if info.Size() > maxSize {
+			return nil
+		}
+
+		// Skip binary files based on extension
+		if isBinaryExtension(strings.ToLower(filepath.Ext(relPath))) {
 			return nil
 		}
 

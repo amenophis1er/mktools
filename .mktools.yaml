@@ -1,0 +1,57 @@
+llm:
+    provider: anthropic
+    model: claude-3-sonnet
+    api_key: ""
+context:
+    output_format: md
+    ignore_patterns:
+        - .git/
+        - node_modules/
+        - vendor/
+        - .idea/
+        - '*.pyc'
+        - '*.pyo'
+        - '*.so'
+        - '*.dylib'
+        - '*.dll'
+        - '*.class'
+        - .DS_Store
+        - Thumbs.db
+        - '*.swp'
+        - '*.swo'
+        - '*~'
+        - .env
+        - '*.log'
+    max_file_size: 1MB
+    include_file_structure: true
+    include_file_content: true
+    exclude_extensions:
+        - .exe
+        - .bin
+        - .o
+        - .a
+        - .lib
+        - .so
+        - .dylib
+        - .dll
+        - .zip
+        - .tar
+        - .gz
+        - .7z
+        - .rar
+        - .jpg
+        - .jpeg
+        - .png
+        - .gif
+        - .bmp
+        - .ico
+        - .mp3
+        - .mp4
+        - .avi
+        - .mov
+        - .pdf
+        - .doc
+        - .docx
+        - .xls
+        - .xlsx
+    max_files_to_include: 100
