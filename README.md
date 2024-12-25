@@ -16,7 +16,7 @@ mktools is a Swiss Army knife for development tasks, focusing on generating cont
 
 ```bash
 # Install
-brew tap amenophis1er/mktools
+brew tap amenophis1er/homebrew-mktools
 brew install mktools
 
 # Update
