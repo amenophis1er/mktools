@@ -32,7 +32,23 @@ release: ## Create and push a new release tag (requires VERSION=v*.*.*)
 	fi
 	@git tag -a $(VERSION) -m "Release $(VERSION)" || { echo "$(RED)ERROR: Failed to create Git tag.$(NC)"; exit 1; }
 	@git push origin $(VERSION) || { echo "$(RED)ERROR: Failed to push Git tag to origin.$(NC)"; exit 1; }
-	@echo "$(GREEN)SUCCESS: Release $(VERSION) tagged and pushed. GitHub Actions will handle the release.$(NC)"
+	@echo "$(GREEN)Tag $(VERSION) created and pushed successfully.$(NC)"
+	@if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
+		echo "Monitoring release workflow status..."; \
+		sleep 5; \
+		until run_id=$$(gh run list --limit 1 --json databaseId -q '.[0].databaseId'); do \
+			echo "Waiting for workflow to start..."; \
+			sleep 5; \
+		done; \
+		echo "Workflow started (ID: $$run_id)"; \
+		gh run watch "$$run_id" || { \
+			echo "$(RED)ERROR: Release workflow failed. Check https://github.com/amenophis1er/mktools/actions for details$(NC)"; \
+			exit 1; \
+		}; \
+		echo "$(GREEN)SUCCESS: Release $(VERSION) workflow completed successfully!$(NC)"; \
+	else \
+		echo "$(YELLOW)NOTE: GitHub CLI not available. Check workflow status at: https://github.com/amenophis1er/mktools/actions$(NC)"; \
+	fi
 
 
 reset-tags: ## Delete all Git tags locally and remotely, and attempt to clear workflow runs if possible
