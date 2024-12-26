@@ -45,9 +45,53 @@ Invoke-WebRequest -Uri https://github.com/amenophis1er/mktools/releases/latest/d
 ```
 
 ### Option 3: Go Install
+#### Latest release (recommended)
+```bash
+go install github.com/amenophis1er/mktools@v1.0.0
+```
 
+#### Development version (main branch)
 ```bash
 go install github.com/amenophis1er/mktools@latest
+```
+
+> <u>Note:</u> When installing via go install, version information will show as "main" since
+it's built directly from source without release build flags. For the full release
+version information, use the Homebrew installation or download the binary directly from
+the releases page.
+
+## Uninstallation
+
+### Homebrew
+```bash
+brew uninstall mktools
+brew untap amenophis1er/homebrew-mktools
+```
+
+### Direct Download
+Remove the binary from your system:
+```bash
+# macOS/Linux
+rm /usr/local/bin/mktools
+
+# Windows (PowerShell)
+Remove-Item mktools.exe
+```
+
+### Go Install
+```bash
+# Remove the binary
+go clean -i github.com/amenophis1er/mktools
+```
+
+### Configuration Cleanup (Optional)
+Remove configuration files:
+```bash
+# Remove global configuration
+rm -rf $HOME/.config/mktools
+
+# Remove local configuration (if any)
+rm .mktools.yaml
 ```
 
 ## Version Management
@@ -123,9 +167,6 @@ mktools config init
 # Show current configuration
 mktools config show
 ```
-
-I'll update the Configuration section in the README.md to include the new features.
-
 
 ## Configuration
 
@@ -265,7 +306,7 @@ mktools automatically excludes:
 - Version control directories
 - Dependency directories
 - Temporary files
-- 
+
 ### Ignore Patterns
 
 mktools uses multiple sources to determine which files to ignore:
@@ -299,6 +340,20 @@ go build
 go test ./...
 ```
 
+### Running During Development
+
+When working on the code, you can run commands directly using `go run`:
+
+```bash
+# Run context command
+go run main.go context .
+
+# Run other commands
+go run main.go config show
+go run main.go version
+```
+
+
 ### Contributing
 
 1. Fork the repository
@@ -309,4 +364,4 @@ go test ./...
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details

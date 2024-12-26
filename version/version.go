@@ -2,7 +2,8 @@
 package version
 
 var (
-	Version = "dev"
-	Commit  = "none"
-	Date    = "unknown"
+    // Overridden during build via -ldflags
+    Version = "main"
+    Commit  = "none"
+    Date    = "unknown"
 )

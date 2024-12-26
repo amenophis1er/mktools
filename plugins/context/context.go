@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+	"time"
 
 	"github.com/amenophis1er/mktools/internal/config"
 	"github.com/amenophis1er/mktools/internal/filesize"
@@ -31,6 +32,68 @@ type ContextOptions struct {
 	Format            string
 	MaxFiles          int
 	AdditionalIgnores []string
+}
+
+var contextFilePatterns = []string{
+    "context.md",
+    "context.txt",
+    "context-*.md",
+    "context-*.txt",
+}
+
+type contextFile struct {
+    path     string
+    format   string
+    metadata *metadata.Metadata
+}
+
+
+func (p *ContextPlugin) detectContextFiles(dir string) ([]contextFile, error) {
+    var files []contextFile
+
+    // Helper function to check file content for metadata
+    checkFile := func(path string) error {
+        content, err := os.ReadFile(path)
+        if err != nil {
+            return nil // Skip unreadable files
+        }
+
+        // Check for metadata marker
+        if bytes.Contains(content, []byte(metadata.MetadataMarker)) {
+            meta, err := metadata.ParseFromContent(string(content))
+            if err != nil {
+                return nil // Skip invalid metadata
+            }
+
+            format := "md"
+            if strings.HasSuffix(path, ".txt") {
+                format = "txt"
+            }
+
+            files = append(files, contextFile{
+                path:     path,
+                format:   format,
+                metadata: meta,
+            })
+        }
+        return nil
+    }
+
+    // Check for existing context files
+    for _, pattern := range contextFilePatterns {
+        matches, err := filepath.Glob(filepath.Join(dir, pattern))
+        if err != nil {
+            continue
+        }
+
+        for _, match := range matches {
+            if err := checkFile(match); err != nil {
+                continue
+            }
+        }
+    }
+
+    return files, nil
 }
 
 func New(cfg *config.Config) *ContextPlugin {
@@ -80,6 +143,23 @@ func (p *ContextPlugin) Execute(ctx context.Context, cmd *cobra.Command, args []
 	if len(args) > 0 {
 		path = args[0]
 	}
+
+    // Check for existing context files
+    contextFiles, err := p.detectContextFiles(path)
+    if err == nil && len(contextFiles) > 0 {
+        for _, cf := range contextFiles {
+            // Check if source files have changed
+            changed, err := cf.metadata.HasSourceChanged(path)
+            if err == nil && !changed {
+                fmt.Printf("No changes detected. Using existing context file: %s\n", cf.path)
+                content, err := os.ReadFile(cf.path)
+                if err == nil {
+                    fmt.Println(string(content))
+                    return nil
+                }
+            }
+        }
+    }
 
 	// Check for existing context file
 	existingContext := p.findExistingContext(path)
@@ -211,11 +291,22 @@ func (p *ContextPlugin) findExistingContext(path string) string {
 }
 
 func (p *ContextPlugin) determineOutputFile(path string) string {
-	ext := ".md"
-	if p.config.Context.OutputFormat == "txt" {
-		ext = ".txt"
-	}
-	return filepath.Join(path, "context"+ext)
+    ext := ".md"
+    if p.config.Context.OutputFormat == "txt" {
+        ext = ".txt"
+    }
+
+    baseName := filepath.Join(path, "context")
+    outputFile := baseName + ext
+
+    // Check if file exists
+    if _, err := os.Stat(outputFile); err == nil {
+        // File exists, try with timestamp
+        timestamp := time.Now().Format("20060102-150405")
+        outputFile = baseName + "-" + timestamp + ext
+    }
+
+    return outputFile
 }
 
 type ProjectInfo struct {
@@ -271,27 +362,34 @@ func detectProject(path string) (*ProjectInfo, error) {
 }
 
 func (p *ContextPlugin) collectFiles(root string, opts *ContextOptions) (map[string]string, error) {
-	files := make(map[string]string)
-	maxSize, err := filesize.Parse(p.config.Context.MaxFileSize)
-	if err != nil {
-		return nil, fmt.Errorf("invalid max file size: %w", err)
-	}
+    files := make(map[string]string)
+    maxSize, err := filesize.Parse(p.config.Context.MaxFileSize)
+    if err != nil {
+        return nil, fmt.Errorf("invalid max file size: %w", err)
+    }
 
-	// Create ignore list
-	ignoreList := ignore.New()
+    // Create ignore list
+    ignoreList := ignore.New()
 
 	// Add configured ignore patterns
-	ignoreList.AddPatterns(p.config.Context.IgnorePatterns)
-	ignoreList.AddPatterns(opts.AdditionalIgnores)
+    ignoreList.AddPatterns(p.config.Context.IgnorePatterns)
+    ignoreList.AddPatterns(opts.AdditionalIgnores)
 
-	// Add the current output file to ignore patterns
-	if opts.OutputFile != "" {
-		ignoreList.AddPattern(filepath.Base(opts.OutputFile))
-	} else {
-		// Add default context files
-		ignoreList.AddPattern("context.md")
-		ignoreList.AddPattern("context.txt")
-	}
+    // Detect and ignore existing context files
+    contextFiles, err := p.detectContextFiles(root)
+    if err == nil { // Don't fail if detection fails
+        for _, cf := range contextFiles {
+            relPath, err := filepath.Rel(root, cf.path)
+            if err == nil {
+                ignoreList.AddPattern(relPath)
+            }
+        }
+    }
+
+    // Add dynamic ignore patterns for context files
+    for _, pattern := range contextFilePatterns {
+        ignoreList.AddPattern(pattern)
+    }
 
 	// Load .gitignore if it exists
 	gitignorePath := filepath.Join(root, ".gitignore")
