@@ -34,6 +34,7 @@ release: ## Create and push a new release tag (requires VERSION=v*.*.*)
 	@git push origin $(VERSION) || { echo "$(RED)ERROR: Failed to push Git tag to origin.$(NC)"; exit 1; }
 	@echo "$(GREEN)SUCCESS: Release $(VERSION) tagged and pushed. GitHub Actions will handle the release.$(NC)"
 
+
 reset-tags: ## Delete all Git tags locally and remotely, and attempt to clear workflow runs if possible
 	@echo "$(RED)WARNING: This will delete ALL tags locally and remotely, and attempt to clear ALL workflow runs$(NC)"
 	@read -p "Are you sure you want to continue? [y/N] " confirm; \
@@ -46,20 +47,44 @@ reset-tags: ## Delete all Git tags locally and remotely, and attempt to clear wo
 		echo "$(RED)ERROR: Remote 'origin' not configured$(NC)" && exit 1; \
 	fi
 
-	@# Try to delete workflow runs if possible
-	@if command -v gh >/dev/null 2>&1; then \
-		if gh auth status >/dev/null 2>&1; then \
-			echo "Deleting all workflow runs..."; \
-			if gh api -X DELETE "/repos/amenophis1er/mktools/actions/runs" --silent; then \
-				echo "$(GREEN)Workflow runs deleted successfully$(NC)"; \
+	@# Check and install gh if needed
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "$(YELLOW)GitHub CLI (gh) is not installed.$(NC)"; \
+		if command -v brew >/dev/null 2>&1; then \
+			read -p "Would you like to install it using Homebrew? [y/N] " install_confirm; \
+			if [ "$$install_confirm" = "y" ]; then \
+				echo "Installing GitHub CLI..."; \
+				brew install gh || { echo "$(RED)Failed to install gh$(NC)"; exit 1; }; \
+				echo "$(GREEN)GitHub CLI installed successfully$(NC)"; \
 			else \
-				echo "$(YELLOW)WARNING: Failed to delete workflow runs, continuing with tag cleanup...$(NC)"; \
+				echo "$(YELLOW)WARNING: Skipping workflow runs cleanup...$(NC)"; \
 			fi; \
 		else \
-			echo "$(YELLOW)WARNING: GitHub CLI not authenticated, skipping workflow runs cleanup...$(NC)"; \
+			echo "$(YELLOW)WARNING: Homebrew not found. Please install gh manually. Skipping workflow runs cleanup...$(NC)"; \
 		fi; \
-	else \
-		echo "$(YELLOW)WARNING: GitHub CLI not installed, skipping workflow runs cleanup...$(NC)"; \
+	fi
+
+	@# Try to authenticate gh if installed
+	@if command -v gh >/dev/null 2>&1; then \
+		if ! gh auth status >/dev/null 2>&1; then \
+			echo "GitHub CLI needs authentication."; \
+			read -p "Would you like to authenticate now? [y/N] " auth_confirm; \
+			if [ "$$auth_confirm" = "y" ]; then \
+				gh auth login || { echo "$(RED)Authentication failed$(NC)"; exit 1; }; \
+			else \
+				echo "$(YELLOW)WARNING: Skipping workflow runs cleanup...$(NC)"; \
+			fi; \
+		fi; \
+	fi
+
+	@# Try to delete workflow runs if gh is available and authenticated
+	@if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
+		echo "Deleting all workflow runs..."; \
+		gh run list --limit 1000 --json databaseId -q '.[].databaseId' | while read -r run_id; do \
+			gh run delete "$$run_id" || \
+				echo "$(YELLOW)WARNING: Failed to delete run $$run_id$(NC)"; \
+		done; \
+		echo "$(GREEN)Workflow runs cleanup completed$(NC)"; \
 	fi
 
 	@echo "Deleting all local tags..."
