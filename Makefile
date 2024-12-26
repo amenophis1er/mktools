@@ -34,17 +34,34 @@ release: ## Create and push a new release tag (requires VERSION=v*.*.*)
 	@git push origin $(VERSION) || { echo "$(RED)ERROR: Failed to push Git tag to origin.$(NC)"; exit 1; }
 	@echo "$(GREEN)SUCCESS: Release $(VERSION) tagged and pushed. GitHub Actions will handle the release.$(NC)"
 
-reset-tags: ## Delete all Git tags locally and remotely (requires confirmation)
-	@echo "$(RED)WARNING: This will delete ALL tags locally and remotely$(NC)"
+reset-tags: ## Delete all Git tags locally and remotely, and attempt to clear workflow runs if possible
+	@echo "$(RED)WARNING: This will delete ALL tags locally and remotely, and attempt to clear ALL workflow runs$(NC)"
 	@read -p "Are you sure you want to continue? [y/N] " confirm; \
 	if [ "$$confirm" != "y" ]; then \
 		echo "Aborted."; \
 		exit 1; \
 	fi
-	@echo "Starting tag cleanup process..."
+	@echo "Starting cleanup process..."
 	@if ! git remote get-url origin >/dev/null 2>&1; then \
 		echo "$(RED)ERROR: Remote 'origin' not configured$(NC)" && exit 1; \
 	fi
+
+	@# Try to delete workflow runs if possible
+	@if command -v gh >/dev/null 2>&1; then \
+		if gh auth status >/dev/null 2>&1; then \
+			echo "Deleting all workflow runs..."; \
+			if gh api -X DELETE "/repos/amenophis1er/mktools/actions/runs" --silent; then \
+				echo "$(GREEN)Workflow runs deleted successfully$(NC)"; \
+			else \
+				echo "$(YELLOW)WARNING: Failed to delete workflow runs, continuing with tag cleanup...$(NC)"; \
+			fi; \
+		else \
+			echo "$(YELLOW)WARNING: GitHub CLI not authenticated, skipping workflow runs cleanup...$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)WARNING: GitHub CLI not installed, skipping workflow runs cleanup...$(NC)"; \
+	fi
+
 	@echo "Deleting all local tags..."
 	@git tag | xargs -r git tag -d
 	@echo "Fetching remote updates and pruning tags..."
